@@ -240,3 +240,15 @@ func newImmutableRangeTree(dimensions uint64) *ImmutableRangeTree {
 		dimensions: dimensions,
 	}
 }
+
+// NewImmutable will construct and return an immutable rangetree.
+// The immutable range tree is threadsafe without using locks.
+// All methods on the rangetree returned this copy with the changes
+// applied.  In this way, you can always keep the prevoius rangetrees
+// in history for querying history.  Because this tree is immutable,
+// its performance suffers in comparison with its mutable counterparts.
+// This is especially true of shift types of operations which require
+// a great deal of copying.
+func NewImmutable(dimensions uint64) *ImmutableRangeTree {
+	return newImmutableRangeTree(dimensions)
+}
