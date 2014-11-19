@@ -2,7 +2,7 @@ package rangetree
 
 import "github.com/Workiva/go-datastructures/slice"
 
-type immutableRangeTree struct {
+type ImmutableRangeTree struct {
 	number     uint64
 	top        orderedNodes
 	dimensions uint64
@@ -16,11 +16,11 @@ func newCache(dimensions uint64) []slice.Int64Slice {
 	return cache
 }
 
-func (irt *immutableRangeTree) needNextDimension() bool {
+func (irt *ImmutableRangeTree) needNextDimension() bool {
 	return irt.dimensions > 1
 }
 
-func (irt *immutableRangeTree) add(nodes *orderedNodes, cache []slice.Int64Slice, entry Entry, added *uint64) {
+func (irt *ImmutableRangeTree) add(nodes *orderedNodes, cache []slice.Int64Slice, entry Entry, added *uint64) {
 	var node *node
 	list := nodes
 
@@ -59,7 +59,7 @@ func (irt *immutableRangeTree) add(nodes *orderedNodes, cache []slice.Int64Slice
 
 // Add will add the provided entries into the tree and return
 // a new tree with those entries added.
-func (irt *immutableRangeTree) Add(entries ...Entry) *immutableRangeTree {
+func (irt *ImmutableRangeTree) Add(entries ...Entry) *ImmutableRangeTree {
 	if len(entries) == 0 {
 		return irt
 	}
@@ -83,8 +83,8 @@ func (irt *immutableRangeTree) Add(entries ...Entry) *immutableRangeTree {
 // Returned are two lists and the modified tree.  The first list is a
 // list of entries that were moved.  The second is a list entries that
 // were deleted.  These lists are exclusive.
-func (irt *immutableRangeTree) InsertAtDimension(dimension uint64,
-	index, number int64) (*immutableRangeTree, Entries, Entries) {
+func (irt *ImmutableRangeTree) InsertAtDimension(dimension uint64,
+	index, number int64) (*ImmutableRangeTree, Entries, Entries) {
 
 	if dimension > irt.dimensions || number == 0 {
 		return irt, nil, nil
@@ -110,7 +110,9 @@ type immutableNodeBundle struct {
 	newNode      *node
 }
 
-func (irt *immutableRangeTree) Delete(entries ...Entry) *immutableRangeTree {
+// Delete will remove the provided entries from the rangetree if they exist
+// and return the modified rangetree.
+func (irt *ImmutableRangeTree) Delete(entries ...Entry) *ImmutableRangeTree {
 	cache := newCache(irt.dimensions)
 	top := make(orderedNodes, len(irt.top))
 	copy(top, irt.top)
@@ -125,7 +127,7 @@ func (irt *immutableRangeTree) Delete(entries ...Entry) *immutableRangeTree {
 	return tree
 }
 
-func (irt *immutableRangeTree) delete(top *orderedNodes,
+func (irt *ImmutableRangeTree) delete(top *orderedNodes,
 	cache []slice.Int64Slice, entry Entry, deleted *uint64) {
 
 	path := make([]*immutableNodeBundle, 0, 5)
@@ -181,7 +183,7 @@ func (irt *immutableRangeTree) delete(top *orderedNodes,
 	}
 }
 
-func (irt *immutableRangeTree) apply(list orderedNodes, interval Interval,
+func (irt *ImmutableRangeTree) apply(list orderedNodes, interval Interval,
 	dimension uint64, fn func(*node) bool) bool {
 
 	low, high := interval.LowAtDimension(dimension), interval.HighAtDimension(dimension)
@@ -205,9 +207,19 @@ func (irt *immutableRangeTree) apply(list orderedNodes, interval Interval,
 	return true
 }
 
+// Apply will call the provided function with each entry that exists
+// within the provided range, in order.  Return false at any time to
+// cancel iteration.  Altering the entry in such a way that its location
+// changes will result in undefined behavior.
+func (irt *ImmutableRangeTree) Apply(interval Interval, fn func(Entry) bool) {
+	irt.apply(irt.top, interval, 1, func(n *node) bool {
+		return fn(n.entry)
+	})
+}
+
 // Query will return an ordered list of results in the given
 // interval.
-func (irt *immutableRangeTree) Query(interval Interval) Entries {
+func (irt *ImmutableRangeTree) Query(interval Interval) Entries {
 	entries := NewEntries()
 
 	irt.apply(irt.top, interval, 1, func(n *node) bool {
@@ -219,12 +231,12 @@ func (irt *immutableRangeTree) Query(interval Interval) Entries {
 }
 
 // Len returns the number of items in this tree.
-func (irt *immutableRangeTree) Len() uint64 {
+func (irt *ImmutableRangeTree) Len() uint64 {
 	return irt.number
 }
 
-func newImmutableRangeTree(dimensions uint64) *immutableRangeTree {
-	return &immutableRangeTree{
+func newImmutableRangeTree(dimensions uint64) *ImmutableRangeTree {
+	return &ImmutableRangeTree{
 		dimensions: dimensions,
 	}
 }

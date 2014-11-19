@@ -1,6 +1,7 @@
 package rangetree
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -310,7 +311,7 @@ func TestImmutableMultiDimensionBulkDeletes(t *testing.T) {
 	assert.Equal(t, 0, tree3.Len())
 }
 
-func constructMultiDimensionalImmutableTree(number int64) (*immutableRangeTree, Entries) {
+func constructMultiDimensionalImmutableTree(number int64) (*ImmutableRangeTree, Entries) {
 	tree := newImmutableRangeTree(2)
 	entries := make(Entries, 0, number)
 	for i := int64(0); i < number; i++ {
@@ -520,4 +521,79 @@ func BenchmarkImmutableInsertSecondDimension(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tree.InsertAtDimension(2, 0, 1)
 	}
+}
+
+func TestImmutableTreeApply(t *testing.T) {
+	tree, entries := constructMultiDimensionalImmutableTree(2)
+
+	result := make(Entries, 0, len(entries))
+
+	tree.Apply(constructMockInterval(dimension{0, 100}, dimension{0, 100}),
+		func(e Entry) bool {
+			result = append(result, e)
+			return true
+		},
+	)
+
+	assert.Equal(t, entries, result)
+}
+
+func TestImmutableApplyWithBail(t *testing.T) {
+	tree, entries := constructMultiDimensionalImmutableTree(2)
+
+	result := make(Entries, 0, 1)
+
+	tree.Apply(constructMockInterval(dimension{0, 100}, dimension{0, 100}),
+		func(e Entry) bool {
+			result = append(result, e)
+			return false
+		},
+	)
+
+	assert.Equal(t, entries[:1], result)
+}
+
+func BenchmarkImmutableApply(b *testing.B) {
+	numItems := 1000
+
+	tree, _ := constructMultiDimensionalImmutableTree(int64(numItems))
+
+	iv := constructMockInterval(
+		dimension{0, int64(numItems)}, dimension{0, int64(numItems)},
+	)
+	fn := func(Entry) bool { return true }
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		tree.Apply(iv, fn)
+	}
+}
+
+// TestRaceCondition is designed to be run with the
+// race detector on.  If immutability is working as expected,
+// there should not be any race conditions detected.
+func TestRaceCondition(t *testing.T) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	tree, _ := constructMultiDimensionalImmutableTree(3)
+	iv := constructMockInterval(dimension{0, 10}, dimension{0, 10})
+	entry := constructMockEntry(4, 4, 4)
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			tree.Query(iv)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		for i := 0; i < 1000; i++ {
+			tree.Add(entry)
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
