@@ -25,29 +25,29 @@ import (
 func TestOrderedAdd(t *testing.T) {
 	nodes := make(orderedNodes, 0)
 
-	n1 := newNode(4, constructMockEntry(1, 4), false)
-	n2 := newNode(1, constructMockEntry(2, 1), false)
+	e1 := constructMockEntry(1, 4)
+	e2 := constructMockEntry(2, 1)
 
-	nodes.add(n1)
-	nodes.add(n2)
+	nodes.add(1, e1)
+	nodes.add(1, e2)
 
-	assert.Equal(t, orderedNodes{n2, n1}, nodes)
+	assert.Equal(t, Entries{e2, e1}, nodes.toEntries())
 }
 
 func TestOrderedDelete(t *testing.T) {
 	nodes := make(orderedNodes, 0)
 
-	n1 := newNode(4, constructMockEntry(1, 4), false)
-	n2 := newNode(1, constructMockEntry(2, 1), false)
+	e1 := constructMockEntry(1, 4)
+	e2 := constructMockEntry(2, 1)
 
-	nodes.add(n1)
-	nodes.add(n2)
+	nodes.add(1, e1)
+	nodes.add(1, e2)
 
-	nodes.delete(n2.value)
+	nodes.delete(1)
 
-	assert.Equal(t, orderedNodes{n1}, nodes)
+	assert.Equal(t, Entries{e1}, nodes.toEntries())
 
-	nodes.delete(n1.value)
+	nodes.delete(4)
 
 	assert.Len(t, nodes, 0)
 }
@@ -55,25 +55,25 @@ func TestOrderedDelete(t *testing.T) {
 func TestApply(t *testing.T) {
 	ns := make(orderedNodes, 0)
 
-	n1 := newNode(4, constructMockEntry(1, 4), false)
-	n2 := newNode(1, constructMockEntry(2, 1), false)
+	e1 := constructMockEntry(1, 4)
+	e2 := constructMockEntry(2, 1)
 
-	ns.add(n1)
-	ns.add(n2)
+	ns.add(1, e1)
+	ns.add(1, e2)
 
-	results := make(nodes, 0, 2)
+	results := make(Entries, 0, 2)
 
 	ns.apply(1, 2, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
-	assert.Equal(t, nodes{n2}, results)
+	assert.Equal(t, Entries{e2}, results)
 
 	results = results[:0]
 
 	ns.apply(0, 1, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
@@ -81,7 +81,7 @@ func TestApply(t *testing.T) {
 	results = results[:0]
 
 	ns.apply(2, 4, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
@@ -89,23 +89,23 @@ func TestApply(t *testing.T) {
 	results = results[:0]
 
 	ns.apply(4, 5, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
-	assert.Equal(t, nodes{n1}, results)
+	assert.Equal(t, Entries{e1}, results)
 	results = results[:0]
 
 	ns.apply(0, 5, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
-	assert.Equal(t, nodes{n2, n1}, results)
+	assert.Equal(t, Entries{e2, e1}, results)
 	results = results[:0]
 
 	ns.apply(5, 10, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return true
 	})
 
@@ -113,23 +113,23 @@ func TestApply(t *testing.T) {
 	results = results[:0]
 
 	ns.apply(0, 100, func(n *node) bool {
-		results = append(results, n)
+		results = append(results, n.entry)
 		return false
 	})
 
-	assert.Equal(t, nodes{n2}, results)
+	assert.Equal(t, Entries{e2}, results)
 }
 
 func TestInsertDelete(t *testing.T) {
 	ns := make(orderedNodes, 0)
 
-	n1 := newNode(4, constructMockEntry(1, 4), false)
-	n2 := newNode(1, constructMockEntry(2, 1), false)
-	n3 := newNode(2, constructMockEntry(3, 2), false)
+	e1 := constructMockEntry(1, 4)
+	e2 := constructMockEntry(2, 1)
+	e3 := constructMockEntry(3, 2)
 
-	ns.add(n1)
-	ns.add(n2)
-	ns.add(n3)
+	ns.add(1, e1)
+	ns.add(1, e2)
+	ns.add(1, e3)
 
 	modified := make(Entries, 0, 1)
 	deleted := make(Entries, 0, 1)
@@ -137,5 +137,5 @@ func TestInsertDelete(t *testing.T) {
 	ns.insert(2, 2, 2, 0, -5, &modified, &deleted)
 
 	assert.Len(t, ns, 0)
-	assert.Equal(t, Entries{n2.entry, n3.entry, n1.entry}, deleted)
+	assert.Equal(t, Entries{e2, e3, e1}, deleted)
 }

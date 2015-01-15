@@ -51,9 +51,14 @@ func (nodes *orderedNodes) addAt(i int, node *node) *node {
 	return nil
 }
 
-func (nodes *orderedNodes) add(node *node) *node {
+func (nodes *orderedNodes) add(dimension uint64, entry Entry) Entry {
+	node := newNode(entry.ValueAtDimension(dimension), entry, true)
 	i := nodes.search(node.value)
-	return nodes.addAt(i, node)
+	node = nodes.addAt(i, node)
+	if node == nil {
+		return nil
+	}
+	return node.entry
 }
 
 func (nodes *orderedNodes) deleteAt(i int) {
@@ -236,4 +241,12 @@ func (nodes orderedNodes) immutableInsert(insertDimension, dimension, maxDimensi
 	}
 
 	return cp
+}
+
+// toEntries is a helper method to convert this list of nodes to
+// a list of their respective entries.
+func (nodes orderedNodes) toEntries() Entries {
+	entries := make(Entries, 0, len(nodes))
+	nodes.flatten(&entries)
+	return entries
 }

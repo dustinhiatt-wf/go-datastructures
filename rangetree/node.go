@@ -19,9 +19,8 @@ package rangetree
 type nodes []*node
 
 type node struct {
-	value        int64
-	entry        Entry
-	orderedNodes orderedNodes
+	value int64
+	list  dimensionalList
 }
 
 func newNode(value int64, entry Entry, needNextDimension bool) *node {

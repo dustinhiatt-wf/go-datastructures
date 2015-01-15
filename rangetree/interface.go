@@ -29,6 +29,11 @@ TODO: unify both implementations with the same interface.
 
 package rangetree
 
+// dimensionalList is used internally to defines objects living in a dimension.
+type dimensionalList interface {
+	add(dimension uint64, entry Entry)
+}
+
 // Entry defines items that can be added to the rangetree.
 type Entry interface {
 	// ValueAtDimension returns the value of this entry

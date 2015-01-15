@@ -26,7 +26,7 @@ type nodeBundle struct {
 }
 
 type orderedTree struct {
-	top        orderedNodes
+	top        dimensionalList
 	number     uint64
 	dimensions uint64
 	path       []*nodeBundle
@@ -42,15 +42,13 @@ func (ot *orderedTree) needNextDimension() bool {
 
 // add will add the provided entry to the rangetree and return an
 // entry if one was overwritten.
-func (ot *orderedTree) add(entry Entry) *node {
+func (ot *orderedTree) add(entry Entry) Entry {
 	var node *node
 	list := &ot.top
 
 	for i := uint64(1); i <= ot.dimensions; i++ {
 		if isLastDimension(ot.dimensions, i) {
-			overwritten := list.add(
-				newNode(entry.ValueAtDimension(i), entry, false),
-			)
+			overwritten := list.add(i, entry)
 			if overwritten == nil {
 				ot.number++
 			}
@@ -81,7 +79,7 @@ func (ot *orderedTree) Add(entries ...Entry) Entries {
 
 		overwritten := ot.add(entry)
 		if overwritten != nil {
-			overwrittens = append(overwrittens, overwritten.entry)
+			overwrittens = append(overwrittens, overwritten)
 		} else {
 			overwrittens = append(overwrittens, nil)
 		}

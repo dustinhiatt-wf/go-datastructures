@@ -49,8 +49,7 @@ func (irt *immutableRangeTree) add(nodes *orderedNodes, cache []slice.Int64Slice
 				cache[i-1].Insert(node.value)
 			}
 
-			newNode := newNode(entry.ValueAtDimension(i), entry, false)
-			overwritten := list.add(newNode)
+			overwritten := list.add(i, entry)
 			if overwritten == nil {
 				*added++
 			}
