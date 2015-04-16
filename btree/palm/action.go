@@ -20,22 +20,20 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-
-	"github.com/Workiva/go-datastructures/common"
 )
 
 type actions []action
 
 type action interface {
 	operation() operation
-	keys() common.Comparators
+	keys() interfaces
 	complete()
 	addNode(int64, *node)
 	nodes() []*node
 }
 
 type getAction struct {
-	result    common.Comparators
+	result    interfaces
 	completer *sync.WaitGroup
 }
 
@@ -47,7 +45,7 @@ func (ga *getAction) operation() operation {
 	return get
 }
 
-func (ga *getAction) keys() common.Comparators {
+func (ga *getAction) keys() interfaces {
 	return ga.result
 }
 
@@ -59,8 +57,8 @@ func (ga *getAction) nodes() []*node {
 	return nil
 }
 
-func newGetAction(keys common.Comparators) *getAction {
-	result := make(common.Comparators, len(keys))
+func newGetAction(keys interfaces) *getAction {
+	result := make(interfaces, len(keys))
 	copy(result, keys) // don't want to mutate passed in keys
 	ga := &getAction{
 		result:    result,
@@ -71,7 +69,7 @@ func newGetAction(keys common.Comparators) *getAction {
 }
 
 type insertAction struct {
-	result    common.Comparators
+	result    interfaces
 	completer *sync.WaitGroup
 	ns        []*node
 }
@@ -84,7 +82,7 @@ func (ia *insertAction) operation() operation {
 	return add
 }
 
-func (ia *insertAction) keys() common.Comparators {
+func (ia *insertAction) keys() interfaces {
 	return ia.result
 }
 
@@ -96,8 +94,8 @@ func (ia *insertAction) nodes() []*node {
 	return ia.ns
 }
 
-func newInsertAction(keys common.Comparators) *insertAction {
-	result := make(common.Comparators, len(keys))
+func newInsertAction(keys interfaces) *insertAction {
+	result := make(interfaces, len(keys))
 	copy(result, keys)
 	ia := &insertAction{
 		result:    result,
@@ -116,15 +114,15 @@ func (ra *removeAction) operation() operation {
 	return remove
 }
 
-func newRemoveAction(keys common.Comparators) *removeAction {
+func newRemoveAction(keys interfaces) *removeAction {
 	return &removeAction{
 		newInsertAction(keys),
 	}
 }
 
 type applyAction struct {
-	fn          func(common.Comparator) bool
-	start, stop common.Comparator
+	fn          func(interface{}) bool
+	start, stop interface{}
 	completer   *sync.WaitGroup
 }
 
@@ -138,7 +136,7 @@ func (aa *applyAction) nodes() []*node {
 
 func (aa *applyAction) addNode(i int64, n *node) {}
 
-func (aa *applyAction) keys() common.Comparators {
+func (aa *applyAction) keys() interfaces {
 	return nil
 }
 
@@ -146,7 +144,7 @@ func (aa *applyAction) complete() {
 	aa.completer.Done()
 }
 
-func newApplyAction(fn func(common.Comparator) bool, start, stop common.Comparator) *applyAction {
+func newApplyAction(fn func(interface{}) bool, start, stop interface{}) *applyAction {
 	aa := &applyAction{
 		fn:        fn,
 		start:     start,

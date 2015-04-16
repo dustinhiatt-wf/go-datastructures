@@ -45,24 +45,22 @@ BenchmarkExecuteQuery-8	   				   10000	   1290732 ns/op
 */
 package palm
 
-import "github.com/Workiva/go-datastructures/common"
-
 // BTree is the interface returned from this package's constructor.
 type BTree interface {
 	// Insert will insert the provided keys into the tree.
-	Insert(...common.Comparator)
+	Insert(...interface{})
 	// Delete will remove the provided keys from the tree.  If no
 	// matching key is found, this is a no-op.
-	Delete(...common.Comparator)
+	Delete(...interface{})
 	// Get will return a key matching the associated provided
 	// key if it exists.
-	Get(...common.Comparator) common.Comparators
+	Get(...interface{}) []interface{}
 	// Len returns the number of items in the tree.
 	Len() uint64
 	// Query will return a list of Comparators that fall within the
 	// provided start and stop Comparators.  Start is inclusive while
 	// stop is exclusive, ie [start, stop).
-	Query(start, stop common.Comparator) common.Comparators
+	Query(start, stop interface{}) interface{}
 	// Dispose will clean up any resources used by this tree.  This
 	// must be called to prevent a memory leak.
 	Dispose()

@@ -16,10 +16,8 @@ limitations under the License.
 
 package palm
 
-import "github.com/Workiva/go-datastructures/common"
-
-func reverseKeys(cmps common.Comparators) common.Comparators {
-	reversed := make(common.Comparators, len(cmps))
+func reverseKeys(cmps interfaces) interfaces {
+	reversed := make(interfaces, len(cmps))
 	for i := len(cmps) - 1; i >= 0; i-- {
 		reversed[len(cmps)-1-i] = cmps[i]
 	}
@@ -27,8 +25,8 @@ func reverseKeys(cmps common.Comparators) common.Comparators {
 	return reversed
 }
 
-func chunkKeys(keys common.Comparators, numParts int64) []common.Comparators {
-	parts := make([]common.Comparators, numParts)
+func chunkKeys(keys interfaces, numParts int64) []interfaces {
+	parts := make([]interfaces, numParts)
 	for i := int64(0); i < numParts; i++ {
 		parts[i] = keys[i*int64(len(keys))/numParts : (i+1)*int64(len(keys))/numParts]
 	}

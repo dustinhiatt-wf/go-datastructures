@@ -15,18 +15,15 @@ limitations under the License.
 */
 package palm
 
-import "github.com/Workiva/go-datastructures/common"
+func mockComparator(item1, item2 interface{}) int {
+	mk1 := item1.(int)
+	mk2 := item2.(int)
 
-type mockKey int
-
-func (mk mockKey) Compare(other common.Comparator) int {
-	otherKey := other.(mockKey)
-
-	if mk == otherKey {
+	if mk1 == mk2 {
 		return 0
 	}
 
-	if mk > otherKey {
+	if mk1 > mk2 {
 		return 1
 	}
 

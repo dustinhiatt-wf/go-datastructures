@@ -19,14 +19,12 @@ package palm
 import (
 	"log"
 	"sort"
-
-	"github.com/Workiva/go-datastructures/common"
 )
 
-func getParent(parent *node, key common.Comparator) *node {
+func getParent(cmp Comparator, parent *node, key interface{}) *node {
 	var n *node
 	for parent != nil && !parent.isLeaf {
-		n = parent.searchNode(key)
+		n = parent.searchNode(cmp, key)
 		parent = n
 	}
 
@@ -81,12 +79,12 @@ func newNodes(size uint64) *nodes {
 }
 
 type keys struct {
-	list common.Comparators
+	list interfaces
 }
 
 func (ks *keys) splitAt(i, capacity uint64) (*keys, *keys) {
 	i++
-	right := make(common.Comparators, uint64(len(ks.list))-i, capacity)
+	right := make(interfaces, uint64(len(ks.list))-i, capacity)
 	copy(right, ks.list[i:])
 	for j := i; j < uint64(len(ks.list)); j++ {
 		ks.list[j] = nil
@@ -99,20 +97,20 @@ func (ks *keys) len() uint64 {
 	return uint64(len(ks.list))
 }
 
-func (ks *keys) byPosition(i uint64) common.Comparator {
+func (ks *keys) byPosition(i uint64) interface{} {
 	if i >= uint64(len(ks.list)) {
 		return nil
 	}
 	return ks.list[i]
 }
 
-func (ks *keys) delete(k common.Comparator) common.Comparator {
-	i := ks.search(k)
+func (ks *keys) delete(cmp Comparator, k interface{}) interface{} {
+	i := ks.search(cmp, k)
 	if i >= uint64(len(ks.list)) {
 		return nil
 	}
 
-	if ks.list[i].Compare(k) != 0 {
+	if cmp(ks.list[i], k) != 0 {
 		return nil
 	}
 	old := ks.list[i]
@@ -123,23 +121,23 @@ func (ks *keys) delete(k common.Comparator) common.Comparator {
 	return old
 }
 
-func (ks *keys) search(key common.Comparator) uint64 {
+func (ks *keys) search(cmp Comparator, key interface{}) uint64 {
 	i := sort.Search(len(ks.list), func(i int) bool {
-		return ks.list[i].Compare(key) > -1
+		return cmp(ks.list[i], key) > -1
 	})
 
 	return uint64(i)
 }
 
-func (ks *keys) insert(key common.Comparator) (common.Comparator, uint64) {
-	i := ks.search(key)
+func (ks *keys) insert(cmp Comparator, key interface{}) (interface{}, uint64) {
+	i := ks.search(cmp, key)
 	if i == uint64(len(ks.list)) {
 		ks.list = append(ks.list, key)
 		return nil, i
 	}
 
-	var old common.Comparator
-	if ks.list[i].Compare(key) == 0 {
+	var old interface{}
+	if cmp(ks.list[i], key) == 0 {
 		old = ks.list[i]
 		ks.list[i] = key
 	} else {
@@ -149,22 +147,23 @@ func (ks *keys) insert(key common.Comparator) (common.Comparator, uint64) {
 	return old, i
 }
 
-func (ks *keys) last() common.Comparator {
+func (ks *keys) last() interface{} {
 	return ks.list[len(ks.list)-1]
 }
 
-func (ks *keys) insertAt(i uint64, k common.Comparator) {
+func (ks *keys) insertAt(i uint64, k interface{}) {
 	ks.list = append(ks.list, nil)
 	copy(ks.list[i+1:], ks.list[i:])
 	ks.list[i] = k
 }
 
-func (ks *keys) withPosition(k common.Comparator) (common.Comparator, uint64) {
-	i := ks.search(k)
+func (ks *keys) withPosition(cmp Comparator, k interface{}) (interface{}, uint64) {
+	i := ks.search(cmp, k)
 	if i == uint64(len(ks.list)) {
 		return nil, i
 	}
-	if ks.list[i].Compare(k) == 0 {
+
+	if cmp(ks.list[i], k) == 0 {
 		return ks.list[i], i
 	}
 
@@ -173,7 +172,7 @@ func (ks *keys) withPosition(k common.Comparator) (common.Comparator, uint64) {
 
 func newKeys(size uint64) *keys {
 	return &keys{
-		list: make(common.Comparators, 0, size),
+		list: make(interfaces, 0, size),
 	}
 }
 
@@ -188,7 +187,7 @@ func (n *node) needsSplit(ary uint64) bool {
 	return n.keys.len() >= ary
 }
 
-func (n *node) splitLeaf(i, capacity uint64) (common.Comparator, *node, *node) {
+func (n *node) splitLeaf(i, capacity uint64) (interface{}, *node, *node) {
 	key := n.keys.byPosition(i)
 	_, rightKeys := n.keys.splitAt(i, capacity)
 	nn := &node{
@@ -201,9 +200,9 @@ func (n *node) splitLeaf(i, capacity uint64) (common.Comparator, *node, *node) {
 	return key, n, nn
 }
 
-func (n *node) splitInternal(i, capacity uint64) (common.Comparator, *node, *node) {
+func (n *node) splitInternal(cmp Comparator, i, capacity uint64) (interface{}, *node, *node) {
 	key := n.keys.byPosition(i)
-	n.keys.delete(key)
+	n.keys.delete(cmp, key)
 
 	_, rightKeys := n.keys.splitAt(i-1, capacity)
 	_, rightNodes := n.nodes.splitAt(i, capacity)
@@ -216,25 +215,25 @@ func (n *node) splitInternal(i, capacity uint64) (common.Comparator, *node, *nod
 	return key, n, nn
 }
 
-func (n *node) split(i, capacity uint64) (common.Comparator, *node, *node) {
+func (n *node) split(cmp Comparator, i, capacity uint64) (interface{}, *node, *node) {
 	if n.isLeaf {
 		return n.splitLeaf(i, capacity)
 	}
 
-	return n.splitInternal(i, capacity)
+	return n.splitInternal(cmp, i, capacity)
 }
 
-func (n *node) search(key common.Comparator) uint64 {
-	return n.keys.search(key)
+func (n *node) search(cmp Comparator, key interface{}) uint64 {
+	return n.keys.search(cmp, key)
 }
 
-func (n *node) searchNode(key common.Comparator) *node {
-	i := n.search(key)
+func (n *node) searchNode(cmp Comparator, key interface{}) *node {
+	i := n.search(cmp, key)
 
 	return n.nodes.byPosition(uint64(i))
 }
 
-func (n *node) key() common.Comparator {
+func (n *node) key() interface{} {
 	return n.keys.last()
 }
 
@@ -258,7 +257,7 @@ func (n *node) print(output *log.Logger) {
 // Compare is required by the skip.Entry interface but nodes are always
 // added by position so while this method is required it doesn't
 // need to return anything useful.
-func (n *node) Compare(e common.Comparator) int {
+func (n *node) Compare(e interface{}) int {
 	return 0
 }
 

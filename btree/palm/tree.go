@@ -22,11 +22,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Workiva/go-datastructures/common"
 	"github.com/Workiva/go-datastructures/queue"
 )
 
 type operation int
+
+// Comparator returns an int indicating the relationship between the first and second
+// interface.  If the first interface is greater, this function should return a positive
+// number, if equal should return 0, and if less should return a negative number.
+type Comparator func(interface{}, interface{}) int
 
 const (
 	get operation = iota
@@ -38,7 +42,7 @@ const (
 const multiThreadAt = 1000 // number of keys before we multithread lookups
 
 type keyBundle struct {
-	key         common.Comparator
+	key         interface{}
 	left, right *node
 }
 
@@ -54,6 +58,8 @@ type ptree struct {
 	disposed        uint64
 	buffer1         [8]uint64
 	running         uint64
+	_padding2       [8]uint64
+	comparator      Comparator
 }
 
 func (ptree *ptree) checkAndRun(action action) {
@@ -92,7 +98,7 @@ func (ptree *ptree) checkAndRun(action action) {
 				}
 			case apply:
 				q := action.(*applyAction)
-				n := getParent(ptree.root, q.start)
+				n := getParent(ptree.comparator, ptree.root, q.start)
 				ptree.apply(n, q)
 				q.complete()
 				ptree.reset()
@@ -104,12 +110,13 @@ func (ptree *ptree) checkAndRun(action action) {
 	}
 }
 
-func (ptree *ptree) init(bufferSize, ary uint64) {
+func (ptree *ptree) init(bufferSize, ary uint64, comparator Comparator) {
 	ptree.bufferSize = bufferSize
 	ptree.ary = ary
 	ptree.cache = make([]interface{}, 0, bufferSize)
 	ptree.root = newNode(true, newKeys(ary), newNodes(ary))
 	ptree.actions = queue.NewRingBuffer(ptree.bufferSize)
+	ptree.comparator = comparator
 }
 
 func (ptree *ptree) operationRunner(xns interfaces, threaded bool) {
@@ -124,11 +131,11 @@ func (ptree *ptree) operationRunner(xns interfaces, threaded bool) {
 
 func (ptree *ptree) read(action action) {
 	for i, k := range action.keys() {
-		n := getParent(ptree.root, k)
+		n := getParent(ptree.comparator, ptree.root, k)
 		if n == nil {
 			action.keys()[i] = nil
 		} else {
-			key, _ := n.keys.withPosition(k)
+			key, _ := n.keys.withPosition(ptree.comparator, k)
 			if key == nil {
 				action.keys()[i] = nil
 			} else {
@@ -170,16 +177,16 @@ func (ptree *ptree) fetchKeys(xns interfaces, inParallel bool) (map[*node][]*key
 }
 
 func (ptree *ptree) apply(n *node, aa *applyAction) {
-	i := n.search(aa.start)
+	i := n.search(ptree.comparator, aa.start)
 	if i == n.keys.len() { // nothing to apply against
 		return
 	}
 
-	var k common.Comparator
+	var k interface{}
 	for n != nil {
 		for j := i; j < n.keys.len(); j++ {
 			k = n.keys.byPosition(j)
-			if aa.stop.Compare(k) < 1 || !aa.fn(k) {
+			if ptree.comparator(aa.stop, k) < 1 || !aa.fn(k) {
 				return
 			}
 		}
@@ -192,7 +199,7 @@ func (ptree *ptree) fetchKeysInSerial(xns interfaces) {
 	for _, ifc := range xns {
 		action := ifc.(action)
 		for i, key := range action.keys() {
-			n := getParent(ptree.root, key)
+			n := getParent(ptree.comparator, ptree.root, key)
 			switch action.operation() {
 			case add, remove:
 				action.addNode(int64(i), n)
@@ -200,7 +207,7 @@ func (ptree *ptree) fetchKeysInSerial(xns interfaces) {
 				if n == nil {
 					action.keys()[i] = nil
 				} else {
-					k, _ := n.keys.withPosition(key)
+					k, _ := n.keys.withPosition(ptree.comparator, key)
 					if k == nil {
 						action.keys()[i] = nil
 					} else {
@@ -259,7 +266,7 @@ func (ptree *ptree) fetchKeysInParallel(xns []interface{}) {
 					continue
 				}
 
-				n := getParent(ptree.root, action.keys()[j])
+				n := getParent(ptree.comparator, ptree.root, action.keys()[j])
 				switch action.operation() {
 				case add, remove:
 					action.addNode(j, n)
@@ -267,7 +274,7 @@ func (ptree *ptree) fetchKeysInParallel(xns []interface{}) {
 					if n == nil {
 						action.keys()[j] = nil
 					} else {
-						k, _ := n.keys.withPosition(action.keys()[j])
+						k, _ := n.keys.withPosition(ptree.comparator, action.keys()[j])
 						if k == nil {
 							action.keys()[j] = nil
 						} else {
@@ -285,7 +292,7 @@ func (ptree *ptree) fetchKeysInParallel(xns []interface{}) {
 	wg.Wait()
 }
 
-func (ptree *ptree) splitNode(n, parent *node, nodes *[]*node, keys *common.Comparators) {
+func (ptree *ptree) splitNode(n, parent *node, nodes *[]*node, keys *interfaces) {
 	if !n.needsSplit(ptree.ary) {
 		return
 	}
@@ -295,7 +302,7 @@ func (ptree *ptree) splitNode(n, parent *node, nodes *[]*node, keys *common.Comp
 
 	for i := splitAt; i < length; i += splitAt {
 		offset := length - i
-		k, left, right := n.split(offset, ptree.ary)
+		k, left, right := n.split(ptree.comparator, offset, ptree.ary)
 		left.right = right
 		*keys = append(*keys, k)
 		*nodes = append(*nodes, left, right)
@@ -310,7 +317,7 @@ func (ptree *ptree) applyNode(n *node, adds, deletes []*keyBundle) {
 			break
 		}
 
-		deleted := n.keys.delete(kb.key)
+		deleted := n.keys.delete(ptree.comparator, kb.key)
 		if deleted != nil {
 			atomic.AddUint64(&ptree.number, ^uint64(0))
 		}
@@ -318,7 +325,7 @@ func (ptree *ptree) applyNode(n *node, adds, deletes []*keyBundle) {
 
 	for _, kb := range adds {
 		if n.keys.len() == 0 {
-			oldKey, _ := n.keys.insert(kb.key)
+			oldKey, _ := n.keys.insert(ptree.comparator, kb.key)
 			if n.isLeaf && oldKey == nil {
 				atomic.AddUint64(&ptree.number, 1)
 			}
@@ -329,7 +336,7 @@ func (ptree *ptree) applyNode(n *node, adds, deletes []*keyBundle) {
 			continue
 		}
 
-		oldKey, index := n.keys.insert(kb.key)
+		oldKey, index := n.keys.insert(ptree.comparator, kb.key)
 		if n.isLeaf && oldKey == nil {
 			atomic.AddUint64(&ptree.number, 1)
 		}
@@ -408,7 +415,7 @@ func (ptree *ptree) recursiveMutate(adds, deletes map[*node][]*keyBundle, setRoo
 		ptree.applyNode(n, adds, deletes)
 
 		if n.needsSplit(ptree.ary) {
-			keys := make(common.Comparators, 0, n.keys.len())
+			keys := make(interfaces, 0, n.keys.len())
 			nodes := make([]*node, 0, n.nodes.len())
 			ptree.splitNode(n, parent, &nodes, &keys)
 			write.Lock()
@@ -423,7 +430,7 @@ func (ptree *ptree) recursiveMutate(adds, deletes map[*node][]*keyBundle, setRoo
 }
 
 // Insert will add the provided keys to the tree.
-func (ptree *ptree) Insert(keys ...common.Comparator) {
+func (ptree *ptree) Insert(keys ...interface{}) {
 	ia := newInsertAction(keys)
 	ptree.checkAndRun(ia)
 	ia.completer.Wait()
@@ -431,14 +438,14 @@ func (ptree *ptree) Insert(keys ...common.Comparator) {
 
 // Delete will remove the provided keys from the tree.  If no
 // matching key is found, this is a no-op.
-func (ptree *ptree) Delete(keys ...common.Comparator) {
+func (ptree *ptree) Delete(keys ...interface{}) {
 	ra := newRemoveAction(keys)
 	ptree.checkAndRun(ra)
 	ra.completer.Wait()
 }
 
 // Get will retrieve a list of keys from the provided keys.
-func (ptree *ptree) Get(keys ...common.Comparator) common.Comparators {
+func (ptree *ptree) Get(keys ...interface{}) []interface{} {
 	ga := newGetAction(keys)
 	ptree.checkAndRun(ga)
 	ga.completer.Wait()
@@ -453,9 +460,9 @@ func (ptree *ptree) Len() uint64 {
 // Query will return a list of Comparators that fall within the
 // provided start and stop Comparators.  Start is inclusive while
 // stop is exclusive, ie [start, stop).
-func (ptree *ptree) Query(start, stop common.Comparator) common.Comparators {
-	cmps := make(common.Comparators, 0, 32)
-	aa := newApplyAction(func(cmp common.Comparator) bool {
+func (ptree *ptree) Query(start, stop interface{}) interface{} {
+	cmps := make([]interface{}, 0, 32)
+	aa := newApplyAction(func(cmp interface{}) bool {
 		cmps = append(cmps, cmp)
 		return true
 	}, start, stop)
@@ -480,15 +487,15 @@ func (ptree *ptree) print(output *log.Logger) {
 	ptree.root.print(output)
 }
 
-func newTree(bufferSize, ary uint64) *ptree {
+func newTree(bufferSize, ary uint64, comparator Comparator) *ptree {
 	ptree := &ptree{}
-	ptree.init(bufferSize, ary)
+	ptree.init(bufferSize, ary, comparator)
 	return ptree
 }
 
 // New will allocate, initialize, and return a new B-Tree based
 // on PALM principles.  This type of tree is suited for in-memory
 // indices in a multi-threaded environment.
-func New(bufferSize, ary uint64) BTree {
-	return newTree(bufferSize, ary)
+func New(bufferSize, ary uint64, comparator Comparator) BTree {
+	return newTree(bufferSize, ary, comparator)
 }
